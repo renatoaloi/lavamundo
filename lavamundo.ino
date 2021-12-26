@@ -9,7 +9,11 @@ EthernetClient client;
 unsigned long beginMicros, endMicros;
 unsigned long byteCount = 0;
 bool printWebData = true;
-void setup() {
+
+const int maquinasPortas[] = { 4, 5, 6, 7, 8, 9 };
+const int maquinasIds[] = { 1, 2, 3, 7, 8, 9 };
+
+void initEthernet() {
   Ethernet.init(10);
   Serial.begin(9600);
   while (!Serial) {}
@@ -38,15 +42,6 @@ void setup() {
   if (client.connect(server, 80)) {
     Serial.print("connected to ");
     Serial.println(client.remoteIP());
-    // Make a HTTP request:
-    client.println("POST /iot.php HTTP/1.1");
-    client.println("Host: lavamundo.com.br");
-    client.println("Content-Type: application/x-www-form-urlencoded");
-    client.println("Connection: close");
-    client.println("Content-Length: 20");
-    client.println();
-    client.println("maquina_id=2&emuso=0");
-    client.println();
   } else {
     // if you didn't get a connection to the server:
     Serial.println("connection failed");
@@ -54,21 +49,41 @@ void setup() {
   beginMicros = micros();
 }
 
-void loop() {
-  // if there are incoming bytes available
-  // from the server, read them and print them:
+void sendEthernet(int id) {
+  
+    // Make a HTTP request:
+    client.println("POST /iot.php HTTP/1.1");
+    client.println("Host: lavamundo.com.br");
+    client.println("Content-Type: application/x-www-form-urlencoded");
+    client.println("Connection: close");
+    client.println("Content-Length: 20");
+    client.println();
+    client.print("maquina_id=");
+    client.print(id);
+    client.println("&emuso=1");
+    client.println();
+  
+}
+
+void initPortas() {
+  for (size_t i = 0; i < (sizeof(maquinasPortas) / sizeof(maquinasPortas[0])); i++)
+  {
+    pinMode(maquinasPortas[i], INPUT_PULLUP);
+  }
+}
+
+void receiveEthernet() {
   int len = client.available();
   if (len > 0) {
     byte buffer[80];
     if (len > 80) len = 80;
     client.read(buffer, len);
     if (printWebData) {
-      Serial.write(buffer, len); // show in the serial monitor (slows some boards)
+      Serial.write(buffer, len);
     }
     byteCount = byteCount + len;
   }
 
-  // if the server's disconnected, stop the client:
   if (!client.connected()) {
     endMicros = micros();
     Serial.println();
@@ -84,10 +99,24 @@ void loop() {
     Serial.print(rate);
     Serial.print(" kbytes/second");
     Serial.println();
+  }
+}
 
-    // do nothing forevermore:
-    while (true) {
-      delay(1);
+void setup() {
+  initEthernet();
+  initPortas();
+}
+
+void loop() {
+  for (size_t i = 0; i < (sizeof(maquinasPortas) / sizeof(maquinasPortas[0])); i++)
+  {
+    if (!digitalRead(maquinasPortas[i])) {
+      sendEthernet(maquinasIds[i]);
+      receiveEthernet();
+      break;
     }
   }
+  
+  // debounce
+  delay(500);
 }
